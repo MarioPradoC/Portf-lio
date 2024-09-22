@@ -1,0 +1,118 @@
+library(readr)
+library(data.table)
+library(dplyr)
+library(stringr)
+library(readxl)
+library(openxlsx)
+
+#Estabelecimentos#
+
+setwd("C:/Users/mpjunior/Desktop/Demanda Receita Federeal/Estabelecimentos")
+arquivos <- list.files(pattern = "\\.ESTABELE")
+arquivos
+
+for (i in 1:length(arquivos)) {
+
+  df <- fread(arquivos[i], colClasses = "character", header=FALSE)
+  
+  nomes<-c("cnpj_basico","cnpj_ordem","cnpj_dv","matriz_filial","nm_fantasia","sit_cadastral","dt_sit_cadastral",
+           "motivo_sit_cadastral","nm_exterior","pais","dt_inic_atividade","cnae_principal","cnae_secundaria",
+           "tipo_logr","rua","numero","complemento","bairro","cep","uf","municipio","ddd1","telefone1","ddd2",
+           "telefone2","ddd_fax","fax","email","sit_especial","dt_sit_especial")
+  colnames(df)<-nomes
+  
+  df <- subset(df, uf == "ES")
+  df <- subset(df, sit_cadastral == "02")
+  
+  if (i == 1) {
+    estab <- df
+  } else {
+    estab <- bind_rows(df,estab)
+  }
+}
+
+#Empresas#
+
+setwd("C:/Users/mpjunior/Desktop/Demanda Receita Federeal/Empresas")
+arquivos <- list.files(pattern = "\\.EMPRECSV")
+arquivos
+
+for (i in 1:length(arquivos)) {
+
+  df <- fread(arquivos[i], colClasses = "character", header=FALSE)
+  
+  nomes <- c("cnpj_basico","razao_social","nat_jur","qualif_resp","capital_social","porte_fat","ente_federativo")
+  colnames(df) <- nomes
+  
+  
+  if (i == 1) {
+    df1 <- merge(df,estab, by = "cnpj_basico")
+  } else {
+    df1 <- bind_rows(df1,merge(df,estab, by = "cnpj_basico"))
+  }
+}
+
+df1$cnpj <- as.character(str_c(str_sub(df1$cnpj_basico,1,2),".",str_sub(df1$cnpj_basico,3,5),".",
+                               str_sub(df1$cnpj_basico,6,8),"/",df1$cnpj_ordem,"-",df1$cnpj_dv))
+
+#Municipio#
+df1 <- read_excel("//findes-fs01/IDEIES/Bases de dados/2. Bases/RECEITA FEDERAL/banco_ativos_10_2022.xlsx")
+
+path <- "//findes-fs01/IDEIES/Bases de dados/2. Bases/RECEITA FEDERAL/aux_munic.xlsx"
+aux_munic <- read_excel(path, col_names = F)
+colnames(aux_munic) <- c("municipio","nome municipio")
+aux_munic$municipio <- str_pad(as.character(aux_munic$municipio),4,pad="0")
+
+df1 <- merge(df1,aux_munic, by = "municipio", all.x = TRUE)
+
+#Simples#
+
+path <- "C:/Users/mpjunior/Desktop/Demanda Receita Federeal/F.K03200$W.SIMPLES.CSV.D20813"
+df <- fread(path, colClasses = "character", header=FALSE)
+
+nomes<-c("cnpj_basico","opcao_simples","dt_opcao_simples","dt_exclusao_simples","opcao_mei","dt_opcao_mei",
+         "dt_exclusao_mei")
+colnames(df)<-nomes
+
+df1 <- merge(df1,df, by = "cnpj_basico", all.x = TRUE)
+
+#Organizando e salvando os dados#
+
+df1 <- df1 %>% select("cnpj","cnpj_basico","cnpj_ordem","cnpj_dv","razao_social","nat_jur","qualif_resp","capital_social","porte_fat","ente_federativo","matriz_filial","nm_fantasia","sit_cadastral",
+                      "dt_sit_cadastral","motivo_sit_cadastral","nm_exterior","pais","dt_inic_atividade",
+                      "cnae_principal","cnae_secundaria","tipo_logr","rua","numero","complemento","bairro","cep",
+                      "uf","municipio","nome municipio","telefone1","telefone2","ddd_fax","fax",
+                      "email","sit_especial","dt_sit_especial","opcao_simples","dt_opcao_simples",
+                      "dt_exclusao_simples","opcao_mei","dt_opcao_mei","dt_exclusao_mei")
+
+output_path <- "//findes-fs01/IDEIES/Bases de dados/2. Bases/RECEITA FEDERAL/banco_ativos_10_2022.xlsx"
+write.xlsx(df1, output_path, na = "" , rownames=FALSE, fileEncoding = "LATIN1") 
+
+#Socios#
+
+setwd("C:/Users/mpjunior/Desktop/Demanda Receita Federeal/Socios")
+arquivos <- list.files(pattern = "\\.SOCIOCSV")
+arquivos
+
+estab <- estab[,c("cnpj_basico","sit_cadastral")]
+
+for (i in 1:length(arquivos)) {
+
+  df <- fread(arquivos[i], colClasses = "character", header=FALSE)
+  
+  nomes<-c("cnpj_basico","id_socio","nm_socio","cpf_socio","quali_socio","dt_entrada","pais",
+           "cpf_repr","nm_repr","quali_repr","fx_etaria")
+  colnames(df)<-nomes
+  
+  if (i == 1) {
+    df1 <- merge(df, estab, by = "cnpj_basico")
+  } else {
+    df1 <- bind_rows(df1,merge(df, estab, by = "cnpj_basico"))
+  }
+}
+
+df1 <- df1 %>% select("cnpj_basico","id_socio","nm_socio","cpf_socio","quali_socio","dt_entrada","pais",
+                      "cpf_repr","nm_repr","quali_repr","fx_etaria")
+
+output_path <- "//findes-fs01/IDEIES/Bases de dados/2. Bases/RECEITA FEDERAL/banco_socios_09_2022.xlsx"
+write.xlsx(df1, output_path, na = "" , rownames=FALSE, fileEncoding = "LATIN1") 
