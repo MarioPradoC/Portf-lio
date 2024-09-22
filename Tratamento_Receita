@@ -1,3 +1,4 @@
+# Carrega as bibliotecas necessárias para leitura e manipulação de dados
 library(readr)
 library(data.table)
 library(dplyr)
@@ -5,114 +6,154 @@ library(stringr)
 library(readxl)
 library(openxlsx)
 
-#Estabelecimentos#
+# Definição de caminho seguro e anonimização de caminhos específicos para evitar exposição de dados sensíveis
+# Ao invés de usar caminhos absolutos, use variáveis para modularizar e proteger os caminhos de arquivos
+# Exemplo: caminho_base pode ser alterado conforme o ambiente sem modificar o código inteiro
+caminho_base <- "/caminho/seguro"  # Modifique aqui conforme o seu sistema
+caminho_estabelecimentos <- paste0(caminho_base, "/Estabelecimentos")
+caminho_empresas <- paste0(caminho_base, "/Empresas")
+caminho_socios <- paste0(caminho_base, "/Socios")
+caminho_saida <- paste0(caminho_base, "/resultados")
 
-setwd("C:/Users/mpjunior/Desktop/Demanda Receita Federeal/Estabelecimentos")
+# Estabelecimentos #
+
+# Define o diretório onde estão os arquivos de estabelecimentos
+setwd(caminho_estabelecimentos)
+
+# Lista todos os arquivos que possuem a extensão .ESTABELE (caso sejam arquivos relacionados a estabelecimentos)
 arquivos <- list.files(pattern = "\\.ESTABELE")
 arquivos
 
+# Loop para carregar e processar cada arquivo de estabelecimentos
 for (i in 1:length(arquivos)) {
-
+  
+  # Lê o arquivo em formato de tabela de dados (data.table), todas as colunas como texto
   df <- fread(arquivos[i], colClasses = "character", header=FALSE)
   
-  nomes<-c("cnpj_basico","cnpj_ordem","cnpj_dv","matriz_filial","nm_fantasia","sit_cadastral","dt_sit_cadastral",
-           "motivo_sit_cadastral","nm_exterior","pais","dt_inic_atividade","cnae_principal","cnae_secundaria",
-           "tipo_logr","rua","numero","complemento","bairro","cep","uf","municipio","ddd1","telefone1","ddd2",
-           "telefone2","ddd_fax","fax","email","sit_especial","dt_sit_especial")
-  colnames(df)<-nomes
+  # Define os nomes das colunas conforme o dicionário de dados esperado
+  nomes <- c("cnpj_basico", "cnpj_ordem", "cnpj_dv", "matriz_filial", "nm_fantasia", "sit_cadastral", "dt_sit_cadastral",
+             "motivo_sit_cadastral", "nm_exterior", "pais", "dt_inic_atividade", "cnae_principal", "cnae_secundaria",
+             "tipo_logr", "rua", "numero", "complemento", "bairro", "cep", "uf", "municipio", "ddd1", "telefone1", "ddd2",
+             "telefone2", "ddd_fax", "fax", "email", "sit_especial", "dt_sit_especial")
+  colnames(df) <- nomes
   
-  df <- subset(df, uf == "ES")
-  df <- subset(df, sit_cadastral == "02")
+  # Filtra apenas as empresas do estado do Espírito Santo (ES) e com situação cadastral "02"
+  df <- subset(df, uf == "ES" & sit_cadastral == "02")
   
+  # Combina os arquivos lidos de forma incremental
   if (i == 1) {
     estab <- df
   } else {
-    estab <- bind_rows(df,estab)
+    estab <- bind_rows(df, estab)
   }
 }
 
-#Empresas#
+# Empresas #
 
-setwd("C:/Users/mpjunior/Desktop/Demanda Receita Federeal/Empresas")
+# Define o diretório onde estão os arquivos de empresas
+setwd(caminho_empresas)
+
+# Lista todos os arquivos que possuem a extensão .EMPRECSV (caso sejam arquivos relacionados a empresas)
 arquivos <- list.files(pattern = "\\.EMPRECSV")
 arquivos
 
+# Loop para carregar e processar cada arquivo de empresas
 for (i in 1:length(arquivos)) {
-
+  
+  # Lê o arquivo de empresas em formato de tabela de dados
   df <- fread(arquivos[i], colClasses = "character", header=FALSE)
   
-  nomes <- c("cnpj_basico","razao_social","nat_jur","qualif_resp","capital_social","porte_fat","ente_federativo")
+  # Define os nomes das colunas conforme o dicionário de dados esperado
+  nomes <- c("cnpj_basico", "razao_social", "nat_jur", "qualif_resp", "capital_social", "porte_fat", "ente_federativo")
   colnames(df) <- nomes
   
-  
-  if (i == 1) {
-    df1 <- merge(df,estab, by = "cnpj_basico")
-  } else {
-    df1 <- bind_rows(df1,merge(df,estab, by = "cnpj_basico"))
-  }
-}
-
-df1$cnpj <- as.character(str_c(str_sub(df1$cnpj_basico,1,2),".",str_sub(df1$cnpj_basico,3,5),".",
-                               str_sub(df1$cnpj_basico,6,8),"/",df1$cnpj_ordem,"-",df1$cnpj_dv))
-
-#Municipio#
-df1 <- read_excel("//findes-fs01/IDEIES/Bases de dados/2. Bases/RECEITA FEDERAL/banco_ativos_10_2022.xlsx")
-
-path <- "//findes-fs01/IDEIES/Bases de dados/2. Bases/RECEITA FEDERAL/aux_munic.xlsx"
-aux_munic <- read_excel(path, col_names = F)
-colnames(aux_munic) <- c("municipio","nome municipio")
-aux_munic$municipio <- str_pad(as.character(aux_munic$municipio),4,pad="0")
-
-df1 <- merge(df1,aux_munic, by = "municipio", all.x = TRUE)
-
-#Simples#
-
-path <- "C:/Users/mpjunior/Desktop/Demanda Receita Federeal/F.K03200$W.SIMPLES.CSV.D20813"
-df <- fread(path, colClasses = "character", header=FALSE)
-
-nomes<-c("cnpj_basico","opcao_simples","dt_opcao_simples","dt_exclusao_simples","opcao_mei","dt_opcao_mei",
-         "dt_exclusao_mei")
-colnames(df)<-nomes
-
-df1 <- merge(df1,df, by = "cnpj_basico", all.x = TRUE)
-
-#Organizando e salvando os dados#
-
-df1 <- df1 %>% select("cnpj","cnpj_basico","cnpj_ordem","cnpj_dv","razao_social","nat_jur","qualif_resp","capital_social","porte_fat","ente_federativo","matriz_filial","nm_fantasia","sit_cadastral",
-                      "dt_sit_cadastral","motivo_sit_cadastral","nm_exterior","pais","dt_inic_atividade",
-                      "cnae_principal","cnae_secundaria","tipo_logr","rua","numero","complemento","bairro","cep",
-                      "uf","municipio","nome municipio","telefone1","telefone2","ddd_fax","fax",
-                      "email","sit_especial","dt_sit_especial","opcao_simples","dt_opcao_simples",
-                      "dt_exclusao_simples","opcao_mei","dt_opcao_mei","dt_exclusao_mei")
-
-output_path <- "//findes-fs01/IDEIES/Bases de dados/2. Bases/RECEITA FEDERAL/banco_ativos_10_2022.xlsx"
-write.xlsx(df1, output_path, na = "" , rownames=FALSE, fileEncoding = "LATIN1") 
-
-#Socios#
-
-setwd("C:/Users/mpjunior/Desktop/Demanda Receita Federeal/Socios")
-arquivos <- list.files(pattern = "\\.SOCIOCSV")
-arquivos
-
-estab <- estab[,c("cnpj_basico","sit_cadastral")]
-
-for (i in 1:length(arquivos)) {
-
-  df <- fread(arquivos[i], colClasses = "character", header=FALSE)
-  
-  nomes<-c("cnpj_basico","id_socio","nm_socio","cpf_socio","quali_socio","dt_entrada","pais",
-           "cpf_repr","nm_repr","quali_repr","fx_etaria")
-  colnames(df)<-nomes
-  
+  # Faz o merge entre a tabela de empresas e a tabela de estabelecimentos já processada
   if (i == 1) {
     df1 <- merge(df, estab, by = "cnpj_basico")
   } else {
-    df1 <- bind_rows(df1,merge(df, estab, by = "cnpj_basico"))
+    df1 <- bind_rows(df1, merge(df, estab, by = "cnpj_basico"))
   }
 }
 
-df1 <- df1 %>% select("cnpj_basico","id_socio","nm_socio","cpf_socio","quali_socio","dt_entrada","pais",
-                      "cpf_repr","nm_repr","quali_repr","fx_etaria")
+# Formata o campo CNPJ para o padrão XX.XXX.XXX/XXXX-XX
+df1$cnpj <- as.character(str_c(str_sub(df1$cnpj_basico, 1, 2), ".", str_sub(df1$cnpj_basico, 3, 5), ".", 
+                               str_sub(df1$cnpj_basico, 6, 8), "/", df1$cnpj_ordem, "-", df1$cnpj_dv))
 
-output_path <- "//findes-fs01/IDEIES/Bases de dados/2. Bases/RECEITA FEDERAL/banco_socios_09_2022.xlsx"
-write.xlsx(df1, output_path, na = "" , rownames=FALSE, fileEncoding = "LATIN1") 
+# Carrega um arquivo de municípios, utilizando caminho seguro e protegendo dados sensíveis
+df_municipios <- read_excel(paste0(caminho_base, "/banco_ativos_10_2022.xlsx"))
+
+# Carrega dados auxiliares de municípios, assegurando a anonimização do caminho
+aux_munic <- read_excel(paste0(caminho_base, "/aux_munic.xlsx"), col_names = FALSE)
+colnames(aux_munic) <- c("municipio", "nome_municipio")
+
+# Padroniza o código do município com 4 dígitos
+aux_munic$municipio <- str_pad(as.character(aux_munic$municipio), 4, pad = "0")
+
+# Realiza o merge dos dados de empresas com os dados auxiliares de municípios
+df1 <- merge(df1, aux_munic, by = "municipio", all.x = TRUE)
+
+# Simples #
+
+# Carrega dados do Simples Nacional de forma segura
+path_simples <- paste0(caminho_base, "/F.K03200$W.SIMPLES.CSV.D20813")
+df_simples <- fread(path_simples, colClasses = "character", header = FALSE)
+
+# Define os nomes das colunas do Simples Nacional
+nomes_simples <- c("cnpj_basico", "opcao_simples", "dt_opcao_simples", "dt_exclusao_simples", "opcao_mei", "dt_opcao_mei", 
+                   "dt_exclusao_mei")
+colnames(df_simples) <- nomes_simples
+
+# Faz o merge dos dados do Simples Nacional com a tabela principal
+df1 <- merge(df1, df_simples, by = "cnpj_basico", all.x = TRUE)
+
+# Organizando e salvando os dados #
+
+# Seleciona as colunas de interesse e reorganiza
+df1 <- df1 %>% select("cnpj", "cnpj_basico", "cnpj_ordem", "cnpj_dv", "razao_social", "nat_jur", "qualif_resp", 
+                      "capital_social", "porte_fat", "ente_federativo", "matriz_filial", "nm_fantasia", "sit_cadastral",
+                      "dt_sit_cadastral", "motivo_sit_cadastral", "nm_exterior", "pais", "dt_inic_atividade", 
+                      "cnae_principal", "cnae_secundaria", "tipo_logr", "rua", "numero", "complemento", "bairro", 
+                      "cep", "uf", "municipio", "nome_municipio", "telefone1", "telefone2", "ddd_fax", "fax", 
+                      "email", "sit_especial", "dt_sit_especial", "opcao_simples", "dt_opcao_simples", 
+                      "dt_exclusao_simples", "opcao_mei", "dt_opcao_mei", "dt_exclusao_mei")
+
+# Salva os dados organizados em um arquivo Excel no caminho seguro
+write.xlsx(df1, paste0(caminho_saida, "/banco_ativos_10_2022.xlsx"), na = "", rownames = FALSE, fileEncoding = "LATIN1")
+
+# Socios #
+
+# Define o diretório onde estão os arquivos de sócios
+setwd(caminho_socios)
+
+# Lista todos os arquivos que possuem a extensão .SOCIOCSV (caso sejam arquivos relacionados a sócios)
+arquivos <- list.files(pattern = "\\.SOCIOCSV")
+arquivos
+
+# Filtra as colunas de interesse da tabela de estabelecimentos
+estab <- estab[, c("cnpj_basico", "sit_cadastral")]
+
+# Loop para carregar e processar cada arquivo de sócios
+for (i in 1:length(arquivos)) {
+
+  # Lê o arquivo de sócios em formato de tabela de dados
+  df <- fread(arquivos[i], colClasses = "character", header = FALSE)
+  
+  # Define os nomes das colunas conforme o dicionário de dados esperado
+  nomes_socios <- c("cnpj_basico", "id_socio", "nm_socio", "cpf_socio", "quali_socio", "dt_entrada", "pais",
+                    "cpf_repr", "nm_repr", "quali_repr", "fx_etaria")
+  colnames(df) <- nomes_socios
+  
+  # Faz o merge entre a tabela de sócios e a tabela de estabelecimentos já processada
+  if (i == 1) {
+    df1 <- merge(df, estab, by = "cnpj_basico")
+  } else {
+    df1 <- bind_rows(df1, merge(df, estab, by = "cnpj_basico"))
+  }
+}
+
+# Seleciona as colunas de interesse e organiza os dados
+df1 <- df1 %>% select("cnpj_basico", "id_socio", "nm_socio", "cpf_socio", "quali_socio", "dt_entrada", "pais", 
+                      "cpf_repr", "nm_repr", "quali_repr", "fx_etaria")
+
+# Salva os dados de sócios organizados em um arquivo Excel no caminho seguro
+write.xlsx(df1, paste0(caminho_saida, "/banco_socios_09_2022.xlsx"), na = "", rownames = FALSE, fileEncoding = "LATIN1")
